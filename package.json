@@ -1,0 +1,21 @@
+{
+  "name": "lc0-wasm-simd",
+  "version": "0.31.2",
+  "description": "Leela Chess Zero (Lc0) WebAssembly engine with embedded NNUE",
+  "main": "lc0.js",
+  "scripts": {
+    "test": "node run_eval.js",
+    "serve": "python example/serve_test.py"
+  },
+  "keywords": [
+    "chess",
+    "engine",
+    "leela",
+    "lc0",
+    "wasm",
+    "webassembly",
+    "nnue"
+  ],
+  "author": "The LCZero Authors & Neuroflowinfinix",
+  "license": "GPL-3.0"
+}

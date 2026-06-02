@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lc0 WASM Test</title>
+</head>
+<body>
+    <h1>Lc0 WebAssembly Async Interactive Test</h1>
+    <p>Check the browser console (F12) for engine output.</p>
+    <div>
+        <input type="text" id="uci-cmd" style="width: 300px;" placeholder="Enter UCI command (e.g., go nodes 100)" />
+        <button onclick="sendCommand()">Send</button>
+    </div>
+    <pre id="output" style="background: #eee; padding: 10px; height: 400px; overflow-y: scroll;"></pre>
+
+    <script src="../lc0.js"></script>
+    <script>
+        let push_cmd = null;
+        const output = document.getElementById('output');
+
+        function log(msg) {
+            output.textContent += msg + '\n';
+            output.scrollTop = output.scrollHeight;
+            console.log(msg);
+        }
+
+        async function initEngine() {
+            log("Initializing Lc0 WebAssembly...");
+            try {
+                const M = await LCZ({
+                    noInitialRun: true,
+                    locateFile: (path) => '../' + path,
+                    print: (text) => log('STDOUT: ' + text),
+                    printErr: (text) => log('STDERR: ' + text),
+                });
+                
+                // Start main() in background worker
+                M.callMain(['--weights=embedded', '--backend=eigen', '--threads=1', '--minibatch-size=1']);
+                
+                // Expose our asynchronous command pusher
+                push_cmd = M.cwrap('push_uci_command', null, ['string']);
+                log("Engine initialized and running in background pthread!");
+                
+                // Send initial UCI initialization
+                push_cmd("uci\n");
+                push_cmd("isready\n");
+            } catch (err) {
+                log("Error: " + err);
+            }
+        }
+
+        function sendCommand() {
+            const input = document.getElementById('uci-cmd');
+            const cmd = input.value;
+            if (cmd && push_cmd) {
+                log('>> ' + cmd);
+                push_cmd(cmd + "\n");
+                input.value = '';
+            }
+        }
+
+        initEngine();
+    </script>
+</body>
+</html>
