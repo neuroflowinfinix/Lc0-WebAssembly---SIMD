@@ -1,45 +1,31 @@
-const fs = require('fs');
-const path = require('path');
-const LCZ = require('./lc0_wasm_package/lc0.js');
+const lc0 = require('./lc0.js');
 
-const commands = `uci
-isready
-position startpos moves e2e4 g8f6
-go nodes 10
-`;
+let start = 0;
 
-let pos = 0;
-let stdout_buffer = "";
-(async () => {
-    try {
-        const M = await LCZ({
-            noInitialRun: true,
-            locateFile: (p) => path.join(__dirname, 'lc0_wasm_package', p),
-            print: (t) => {
-                console.log('STDOUT:', t);
-                if (t.includes('bestmove')) {
-                    console.log('Search finished, bestmove found! Exiting in 1 second.');
-                    setTimeout(() => process.exit(0), 1000);
-                }
-            },
-            printErr: (t) => console.error('STDERR:', t)
-        });
-        
-        M.callMain(['--weights=embedded', '--backend=eigen', '--threads=1', '--minibatch-size=1']);
-        
-        const push_cmd = M.cwrap('push_uci_command', null, ['string']);
-        
-        console.log("Sending UCI commands...");
-        push_cmd("uci\n");
-        push_cmd("isready\n");
-        push_cmd("position startpos moves e2e4 g8f6\n");
-        push_cmd("go nodes 10\n");
-        
-        // Keep the Node process alive!
-        setInterval(() => {}, 1000);
-    } catch (ex) { 
-        let msg = ex;
-        try { if (M.getExceptionMessage) msg = M.getExceptionMessage(ex); } catch(e){}
-        console.error('Crash:', ex, msg); 
+lc0({
+  print: (msg) => {
+    console.log("[lc0 out]", msg);
+    if (msg === "readyok") {
+        console.log("Engine is ready, sending go command...");
+        start = Date.now();
+        instance.cwrap('push_uci_command', 'void', ['string'])('position startpos');
+        instance.cwrap('push_uci_command', 'void', ['string'])('go depth 15');
     }
-})();
+    if (msg.includes("bestmove")) {
+        let elapsed = (Date.now() - start) / 1000;
+        console.log(`\n✅ Depth 15 completed in ${elapsed} seconds!`);
+        process.exit(0);
+    }
+  },
+  printErr: (msg) => {
+    console.error("[lc0 err]", msg);
+  }
+}).then(m => {
+  global.instance = m;
+  console.log("Lc0 loaded! Starting main loop...");
+  m.callMain(['--weights=embedded', '--backend=eigen', '--threads=1', '--minibatch-size=1']);
+  console.log("Sending isready...");
+  m.cwrap('push_uci_command', 'void', ['string'])('isready');
+}).catch(err => {
+  console.error("Failed to load WASM:", err);
+});

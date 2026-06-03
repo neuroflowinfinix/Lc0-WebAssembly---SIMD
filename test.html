@@ -1,44 +1,372 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Lc0 WASM Test</title>
+    <link rel="icon" type="image/svg+xml" href="chess-icon.svg">
+    <style>
+        :root {
+            --bg: #1e1e2e;
+            --surface: #27273a;
+            --text: #cdd6f4;
+            --accent: #89b4fa;
+            --accent-hover: #b4befe;
+            --border: #313244;
+            --code-bg: #11111b;
+            --code-text: #a6adc8;
+            --highlight: #f38ba8;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color-scheme: dark;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: var(--surface);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+        h1 { margin-top: 0; color: var(--accent); }
+        .instructions {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent);
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+        .instructions p { margin: 8px 0; }
+        code {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 3px 6px;
+            border-radius: 4px;
+            color: var(--highlight);
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        button {
+            padding: 8px 16px;
+            background: var(--accent);
+            color: #11111b;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+        button:hover { background: var(--accent-hover); }
+        button:active { transform: scale(0.98); }
+        pre {
+            background: var(--code-bg) !important;
+            color: var(--code-text) !important;
+            padding: 15px !important;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            height: 400px;
+            overflow-y: auto;
+            margin: 0;
+            white-space: pre-wrap;
+        }
+        .translation-box {
+            background: var(--code-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #a6e3a1;
+            margin-bottom: 20px;
+            font-size: 15px;
+            min-height: 24px;
+            display: flex;
+            align-items: center;
+        }
+        .translation-box span.label {
+            font-weight: bold;
+            color: #a6e3a1;
+            margin-right: 10px;
+        }
+        /* Modal Styles */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal {
+            background: var(--surface); padding: 30px; border-radius: 12px; width: 90%;
+            max-width: 700px; max-height: 80vh; overflow-y: auto; border: 1px solid var(--border);
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h2 { margin: 0; color: var(--accent); }
+        .close-btn { background: none; border: none; color: var(--text); font-size: 28px; cursor: pointer; }
+        .close-btn:hover { color: var(--highlight); }
+        .setting-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .setting-name { font-weight: 500; flex: 1; padding-right: 15px; }
+        .setting-control { flex: 1; display: flex; justify-content: flex-end; }
+        .setting-control input[type="number"], .setting-control input[type="text"], .setting-control select {
+            background: var(--bg); color: var(--text); border: 1px solid var(--border);
+            padding: 8px 12px; border-radius: 4px; width: 100%; max-width: 250px; font-size: 14px;
+        }
+        .setting-control input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent); }
+    </style>
 </head>
 <body>
-    <h1>Lc0 WebAssembly Async Interactive Test</h1>
-    <p>Check the browser console (F12) for engine output.</p>
-    <div>
-        <input type="text" id="uci-cmd" style="width: 300px;" placeholder="Enter UCI command (e.g., go nodes 100)" />
-        <button onclick="sendCommand()">Send</button>
-    </div>
-    <pre id="output" style="background: #eee; padding: 10px; height: 400px; overflow-y: scroll;"></pre>
+    <div class="container">
+        <h1>Lc0 WebAssembly Interactive Test</h1>
+        
+        <div class="instructions">
+            <strong>How to evaluate a position (e.g. e4 e5):</strong>
+            <p>1. Type the following to set the board state: <code>position startpos moves e2e4 e7e5</code> and press Send.</p>
+            <p>2. Ask the engine to search and evaluate: <code>go nodes 100</code> and press Send.</p>
+            <p><em>Watch the terminal output below for the engine's evaluation and best move recommendations.</em></p>
+        </div>
 
-    <script src="lc0_wasm_package/lc0.js"></script>
+        <div class="input-group">
+            <input type="text" id="uci-cmd" placeholder="Enter UCI command..." onkeypress="if(event.key === 'Enter') sendCommand()" />
+            <button onclick="sendCommand()">Send Command</button>
+            <button onclick="openSettings()" style="background: #45475a; color: #cdd6f4;">Settings</button>
+        </div>
+        
+        <div class="input-group" style="justify-content: flex-start; align-items: center; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; flex-wrap: wrap; gap: 15px;">
+            <div style="display: flex; align-items: center;">
+                <label for="depth-input" style="font-weight: 600; margin-right: 10px;">Target Depth:</label>
+                <input type="number" id="depth-input" value="15" min="1" max="100" style="max-width: 80px; background: var(--bg); color: var(--text); border: 1px solid var(--border);" onkeypress="if(event.key === 'Enter') analyzeAtDepth()" />
+            </div>
+            <button onclick="analyzeAtDepth()" style="background: #a6e3a1; color: #11111b; padding: 8px 24px;">Analyze at Depth</button>
+            <div style="font-size: 13px; color: #a6adc8; margin-left: 10px;">(Will search continuously until this exact depth is reached)</div>
+        </div>
+        
+        <div class="translation-box">
+            <span class="label">Engine Analysis:</span> 
+            <span id="translation-text">Waiting for evaluation...</span>
+        </div>
+
+        <pre id="output"></pre>
+
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-overlay" class="modal-overlay" onclick="if(event.target===this) closeSettings()">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Engine Settings</h2>
+                <button class="close-btn" onclick="closeSettings()">&times;</button>
+            </div>
+            <div id="settings-container">Loading settings...</div>
+        </div>
+    </div>
+
+    <script src="lc0.js"></script>
     <script>
         let push_cmd = null;
         const output = document.getElementById('output');
+        const translationText = document.getElementById('translation-text');
+        
+        let engineOptions = [];
+
+        function openSettings() {
+            document.getElementById('settings-overlay').style.display = 'flex';
+            renderSettings();
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-overlay').style.display = 'none';
+        }
+
+        function handleSettingChange(name, value) {
+            let valStr = value;
+            if (typeof value === 'boolean') valStr = value ? 'true' : 'false';
+            if (push_cmd) {
+                push_cmd(`setoption name ${name} value ${valStr}\n`);
+                log(`>> setoption name ${name} value ${valStr}`);
+            }
+        }
+
+        function renderSettings() {
+            const container = document.getElementById('settings-container');
+            if (engineOptions.length === 0) {
+                container.innerHTML = "<p>No settings parsed yet. Ensure engine is initialized.</p>";
+                return;
+            }
+            
+            let html = '';
+            for (let opt of engineOptions) {
+                html += `<div class="setting-row">
+                            <div class="setting-name">${opt.name}</div>
+                            <div class="setting-control">`;
+                
+                if (opt.type === 'check') {
+                    const checked = opt.currentValue === 'true' ? 'checked' : '';
+                    html += `<input type="checkbox" onchange="handleSettingChange('${opt.name}', this.checked)" ${checked} />`;
+                } else if (opt.type === 'spin') {
+                    html += `<input type="number" min="${opt.min}" max="${opt.max}" value="${opt.currentValue}" onchange="handleSettingChange('${opt.name}', this.value)" />`;
+                } else if (opt.type === 'string') {
+                    html += `<input type="text" value="${opt.currentValue}" onchange="handleSettingChange('${opt.name}', this.value)" />`;
+                } else if (opt.type === 'combo') {
+                    html += `<select onchange="handleSettingChange('${opt.name}', this.value)">`;
+                    for (let v of opt.vars) {
+                        const selected = (v === opt.currentValue) ? 'selected' : '';
+                        html += `<option value="${v}" ${selected}>${v}</option>`;
+                    }
+                    html += `</select>`;
+                } else if (opt.type === 'button') {
+                    html += `<button style="padding: 4px 12px; font-size: 12px;" onclick="if(push_cmd) push_cmd('setoption name ${opt.name}\\n')">Execute</button>`;
+                }
+                
+                html += `</div></div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        function parseUciOption(msg) {
+            if (!msg.startsWith('STDOUT: option name ')) return;
+            let optionString = msg.substring('STDOUT: option name '.length);
+            let parts = optionString.split(' type ');
+            if (parts.length < 2) return;
+            let name = parts[0].trim();
+            let rest = parts[1];
+            
+            let typeMatch = rest.match(/^(\w+)/);
+            if (!typeMatch) return;
+            let type = typeMatch[1];
+            
+            let defaultMatch = rest.match(/default (.*?)(?: min| max| var|$)/);
+            let defaultValue = defaultMatch ? defaultMatch[1].trim() : "";
+            
+            let minMatch = rest.match(/min (.*?)(?: max| var|$)/);
+            let maxMatch = rest.match(/max (.*?)(?: var|$)/);
+            
+            let vars = [];
+            if (type === 'combo') {
+                let varParts = rest.split(' var ');
+                for (let i = 1; i < varParts.length; i++) {
+                    vars.push(varParts[i].trim());
+                }
+            }
+            
+            // Avoid duplicates if initialized multiple times
+            if (!engineOptions.find(o => o.name === name)) {
+                engineOptions.push({ 
+                    name, type, 
+                    defaultValue, 
+                    min: minMatch ? minMatch[1].trim() : null, 
+                    max: maxMatch ? maxMatch[1].trim() : null, 
+                    vars, 
+                    currentValue: defaultValue 
+                });
+            }
+        }
+
+        let lastScoreText = "";
+        let targetDepthLimit = 0;
+
+        function parseUciToFriendly(msg) {
+            if (msg.includes('bestmove')) {
+                const parts = msg.split(' ');
+                const moveIdx = parts.indexOf('bestmove') + 1;
+                if (moveIdx > 0 && moveIdx < parts.length) {
+                    let result = `Search complete. Best move is <strong>${parts[moveIdx]}</strong>.`;
+                    if (lastScoreText) result += ` | Final Eval: <strong>${lastScoreText}</strong>`;
+                    return result;
+                }
+            }
+            if (msg.includes('info') && msg.includes('depth') && msg.includes('score')) {
+                let depth = msg.match(/depth (\d+)/);
+                let score = msg.match(/score (cp|mate) ([\-\d]+)/);
+                let pv = msg.match(/pv (.*)/);
+                
+                if (depth) {
+                    let currentDepth = parseInt(depth[1]);
+                    if (targetDepthLimit > 0 && currentDepth >= targetDepthLimit) {
+                        targetDepthLimit = 0;
+                        log(`>> stop (reached target depth of ${currentDepth})`);
+                        if (push_cmd) push_cmd("stop\n");
+                    }
+                }
+                
+                if (depth && score) {
+                    let scoreText = "";
+                    if (score[1] === "cp") {
+                        let cp = parseInt(score[2]);
+                        scoreText = `${cp > 0 ? '+' : ''}${(cp / 100).toFixed(2)}`;
+                    } else if (score[1] === "mate") {
+                        let m = parseInt(score[2]);
+                        scoreText = `Mate in ${Math.abs(m)}`;
+                    }
+                    lastScoreText = scoreText;
+                    
+                    let considering = pv ? ` | Considering: <strong>${pv[1].split(' ')[0]}</strong>` : "";
+                    return `Searching... Depth: <strong>${depth[1]}</strong> | Eval: <strong>${scoreText}</strong>${considering}`;
+                }
+            }
+            return null;
+        }
 
         function log(msg) {
             output.textContent += msg + '\n';
             output.scrollTop = output.scrollHeight;
             console.log(msg);
+            
+            parseUciOption(msg);
+            
+            const translation = parseUciToFriendly(msg);
+            if (translation) {
+                translationText.innerHTML = translation;
+            }
         }
 
         async function initEngine() {
             log("Initializing Lc0 WebAssembly...");
+            
+            // Detect CPU cores and allocate ~75% to the engine
+            const cores = navigator.hardwareConcurrency || 1;
+            const engineThreads = Math.max(1, Math.floor(cores * 0.75));
+            log(`Detected ${cores} CPU core(s). Allocating ${engineThreads} thread(s) (75%) for maximum SIMD performance...`);
+            
             try {
-                const M = await LCZ({
+                const M = await LeelaChessZero({
                     noInitialRun: true,
-                    locateFile: (path) => 'lc0_wasm_package/' + path,
                     print: (text) => log('STDOUT: ' + text),
                     printErr: (text) => log('STDERR: ' + text),
                 });
                 
                 // Start main() in background worker
-                M.callMain(['--weights=embedded', '--backend=eigen', '--threads=1', '--minibatch-size=1']);
+                M.callMain(['--weights=embedded', '--backend=eigen', `--threads=${engineThreads}`, '--minibatch-size=1']);
                 
                 // Expose our asynchronous command pusher
                 push_cmd = M.cwrap('push_uci_command', null, ['string']);
-                log("Engine initialized and running in background pthread!");
+                log(`Engine initialized and running in background pthreads!`);
                 
                 // Send initial UCI initialization
                 push_cmd("uci\n");
@@ -58,7 +386,21 @@
             }
         }
 
+        function analyzeAtDepth() {
+            const depth = parseInt(document.getElementById('depth-input').value);
+            
+            if (depth && push_cmd) {
+                targetDepthLimit = depth;
+                // Disable Smart Pruning so it doesn't arbitrarily stop early
+                push_cmd(`setoption name SmartPruningFactor value 0.0\n`);
+                
+                log(`>> go infinite (waiting for reported depth ${depth})`);
+                push_cmd(`go infinite\n`);
+            }
+        }
+
         initEngine();
     </script>
+    </div>
 </body>
 </html>
